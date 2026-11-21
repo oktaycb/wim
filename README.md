@@ -1,6 +1,6 @@
 # wim
 
-**wim** is a Windows-native terminal workspace for running coding agents side by side — a C++ take on the [aghouse](https://github.com/pradprat/aghouse) idea, with a vim-flavored command layer on top.
+**wim** is a Windows-native terminal workspace for running coding agents side by side vim-flavored command layer on top.
 
 > Named after vim: `w`indows + `im`. It is a real Win32 application that also
 > starts from any terminal by typing `wim`.
