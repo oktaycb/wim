@@ -38,8 +38,8 @@ void error(const char* f, int l, const char* fmt, ...);
 
 } // namespace wim::log
 
-#define WIM_LOG_TRACE(msg) ::wim::log::trace(__FILE__, __LINE__, (msg))
-#define WIM_LOG_DEBUG(msg) ::wim::log::debug(__FILE__, __LINE__, (msg))
-#define WIM_LOG_INFO(msg) ::wim::log::info(__FILE__, __LINE__, (msg))
-#define WIM_LOG_WARN(msg) ::wim::log::warn(__FILE__, __LINE__, (msg))
-#define WIM_LOG_ERROR(msg) ::wim::log::error(__FILE__, __LINE__, (msg))
+#define WIM_LOG_TRACE(...) ::wim::log::trace(__FILE__, __LINE__, __VA_ARGS__)
+#define WIM_LOG_DEBUG(...) ::wim::log::debug(__FILE__, __LINE__, __VA_ARGS__)
+#define WIM_LOG_INFO(...) ::wim::log::info(__FILE__, __LINE__, __VA_ARGS__)
+#define WIM_LOG_WARN(...) ::wim::log::warn(__FILE__, __LINE__, __VA_ARGS__)
+#define WIM_LOG_ERROR(...) ::wim::log::error(__FILE__, __LINE__, __VA_ARGS__)
