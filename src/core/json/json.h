@@ -36,6 +36,7 @@ public:
     Value(std::string s) : type_(Type::String), str_(std::move(s)) {}
     Value(std::string_view s) : type_(Type::String), str_(s) {}
     Value(std::wstring_view s); // UTF-16 -> UTF-8 (defined in json.cpp)
+    Value(const std::wstring& s);
     static Value array() { Value v; v.type_ = Type::Array; return v; }
     static Value object() { Value v; v.type_ = Type::Object; return v; }
 

@@ -9,6 +9,8 @@ namespace wim::json {
 
 Value::Value(std::wstring_view s) : type_(Type::String), str_(str::toUtf8(s)) {}
 
+Value::Value(const std::wstring& s) : type_(Type::String), str_(str::toUtf8(s)) {}
+
 long long Value::asInt(long long fallback) const
 {
     if (!isNumber())
