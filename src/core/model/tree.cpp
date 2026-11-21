@@ -299,4 +299,93 @@ bool Node::fromJson(const json::Value& v, Node& out, std::string& error)
     return false;
 }
 
+// ---- geometry -----------------------------------------------------------------
+
+namespace {
+
+void layoutInto(const Node& node, Rect area, std::vector<std::pair<SlotId, Rect>>& out)
+{
+    if (node.isSlot()) {
+        out.emplace_back(node.slot().id, area);
+        return;
+    }
+    const bool horizontal = node.dir() == SplitDir::Horizontal;
+    double used = 0;
+    const size_t n = node.children().size();
+    for (size_t i = 0; i < n; ++i) {
+        const double share = i + 1 == n ? 1.0 - used : node.ratios()[i];
+        Rect child = area;
+        if (horizontal) {
+            child.x = area.x + area.w * used;
+            child.w = area.w * share;
+        } else {
+            child.y = area.y + area.h * used;
+            child.h = area.h * share;
+        }
+        layoutInto(node.children()[i], child, out);
+        used += share;
+    }
+}
+
+double clampMin(double v, double lo, double hi) { return v < lo ? lo : (v > hi ? hi : v); }
+
+} // namespace
+
+void layoutSlots(const Node& root, Rect area, std::vector<std::pair<SlotId, Rect>>& out)
+{
+    out.clear();
+    layoutInto(root, area, out);
+}
+
+SlotId neighborSlot(const std::vector<std::pair<SlotId, Rect>>& slots, SlotId from, NavDir dir)
+{
+    const Rect* fromRect = nullptr;
+    for (const auto& [id, r] : slots)
+        if (id == from)
+            fromRect = &r;
+    if (!fromRect)
+        return SlotId{};
+
+    const double cx = fromRect->x + fromRect->w / 2;
+    const double cy = fromRect->y + fromRect->h / 2;
+
+    SlotId best{};
+    double bestDist = 1e18;
+    for (const auto& [id, r] : slots) {
+        if (id == from)
+            continue;
+        const double rx = r.x + r.w / 2;
+        const double ry = r.y + r.h / 2;
+        bool inDirection = false;
+        switch (dir) {
+        case NavDir::Left: inDirection = rx < cx; break;
+        case NavDir::Right: inDirection = rx > cx; break;
+        case NavDir::Up: inDirection = ry < cy; break;
+        case NavDir::Down: inDirection = ry > cy; break;
+        }
+        if (!inDirection)
+            continue;
+        // Distance between centers, but panes that barely overlap on the
+        // perpendicular axis lose to ones squarely in the direction.
+        const double dx = rx - cx, dy = ry - cy;
+        const double along = dir == NavDir::Left || dir == NavDir::Right ? std::abs(dx) : std::abs(dy);
+        const double perp = dir == NavDir::Left || dir == NavDir::Right ? std::abs(dy) : std::abs(dx);
+        const double overlapLo = dir == NavDir::Left || dir == NavDir::Right
+                                     ? std::max(fromRect->y, r.y)
+                                     : std::max(fromRect->x, r.x);
+        const double overlapHi = dir == NavDir::Left || dir == NavDir::Right
+                                     ? std::min(fromRect->y + fromRect->h, r.y + r.h)
+                                     : std::min(fromRect->x + fromRect->w, r.x + r.w);
+        const double overlap = overlapHi - overlapLo; // negative = none
+        // Prefer overlapping panes; among those, the closest. Non-overlapping
+        // ones rank behind any overlapping one.
+        const double dist = along + perp * 0.25 - clampMin(overlap, 0, 1e9) * 0.5;
+        if (dist < bestDist) {
+            bestDist = dist;
+            best = id;
+        }
+    }
+    return best;
+}
+
 } // namespace wim::model

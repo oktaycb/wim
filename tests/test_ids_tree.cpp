@@ -136,3 +136,101 @@ WIM_TEST(TreeSetSiblingRatio)
     // Non-siblings rejected.
     WIM_CHECK(!root.setSiblingRatio(SlotId{1}, SlotId{2}, 0.5));
 }
+
+// ---- split tree (geometry) ---------------------------------------------------
+
+WIM_TEST(TreeLayoutSingleAndSplits)
+{
+    Node root = Node::leaf(makeSlot(1));
+    std::vector<std::pair<SlotId, Rect>> rects;
+    layoutSlots(root, Rect{0, 0, 100, 50}, rects);
+    WIM_CHECK_EQ(rects.size(), size_t(1));
+    WIM_CHECK_EQ(rects[0].first.value, uint64_t(1));
+    WIM_CHECK_EQ(rects[0].second.w, 100.0);
+    WIM_CHECK_EQ(rects[0].second.h, 50.0);
+
+    root.insertRelative(SlotId{1}, SplitDir::Horizontal, Side::After, makeSlot(2));
+    layoutSlots(root, Rect{0, 0, 100, 50}, rects);
+    WIM_CHECK_EQ(rects.size(), size_t(2));
+    WIM_CHECK(std::abs(rects[0].second.w - 50.0) < 1e-9);
+    WIM_CHECK(std::abs(rects[1].second.x - 50.0) < 1e-9);
+    WIM_CHECK(std::abs(rects[1].second.h - 50.0) < 1e-9);
+
+    // Ratio honored: 70/30.
+    root.setSiblingRatio(SlotId{1}, SlotId{2}, 0.7);
+    layoutSlots(root, Rect{0, 0, 100, 50}, rects);
+    WIM_CHECK(std::abs(rects[0].second.w - 70.0) < 1e-9);
+
+    // Nested: split down at 2 -> [1 | [2 / 3]] with thirds.
+    root.insertRelative(SlotId{2}, SplitDir::Vertical, Side::After, makeSlot(3));
+    layoutSlots(root, Rect{0, 0, 90, 40}, rects);
+    WIM_CHECK_EQ(rects.size(), size_t(3));
+    const Rect* r3 = nullptr;
+    for (auto& [id, r] : rects)
+        if (id.value == 3)
+            r3 = &r;
+    WIM_CHECK(r3 != nullptr);
+    WIM_CHECK(std::abs(r3->w - 27.0) < 1e-9); // 30% of 90
+    WIM_CHECK(std::abs(r3->y - 20.0) < 1e-9); // lower half
+}
+
+WIM_TEST(TreeNeighborNavigation)
+{
+    // Grid: [[1 | 2] / [3 | 4]]
+    Node root = Node::leaf(makeSlot(1));
+    root.insertRelative(SlotId{1}, SplitDir::Horizontal, Side::After, makeSlot(2));
+    root.insertRelative(SlotId{1}, SplitDir::Vertical, Side::After, makeSlot(3));
+    root.insertRelative(SlotId{2}, SplitDir::Vertical, Side::After, makeSlot(4));
+
+    std::vector<std::pair<SlotId, Rect>> rects;
+    layoutSlots(root, Rect{0, 0, 100, 100}, rects);
+    WIM_CHECK_EQ(rects.size(), size_t(4));
+
+    WIM_CHECK_EQ(neighborSlot(rects, SlotId{1}, NavDir::Right).value, uint64_t(2));
+    WIM_CHECK_EQ(neighborSlot(rects, SlotId{1}, NavDir::Down).value, uint64_t(3));
+    WIM_CHECK_EQ(neighborSlot(rects, SlotId{4}, NavDir::Left).value, uint64_t(3));
+    WIM_CHECK_EQ(neighborSlot(rects, SlotId{4}, NavDir::Up).value, uint64_t(2));
+    WIM_CHECK_EQ(neighborSlot(rects, SlotId{2}, NavDir::Up).value, uint64_t(0)); // edge
+    WIM_CHECK_EQ(neighborSlot(rects, SlotId{3}, NavDir::Left).value, uint64_t(0));
+    WIM_CHECK_EQ(neighborSlot(rects, SlotId{99}, NavDir::Left).value, uint64_t(0)); // unknown
+}
+
+WIM_TEST(TreeSerializeRoundTrip)
+{
+    Node root = Node::leaf(makeSlot(1));
+    root.insertRelative(SlotId{1}, SplitDir::Horizontal, Side::After, makeSlot(2));
+    root.insertRelative(SlotId{2}, SplitDir::Vertical, Side::After, makeSlot(3));
+    root.setSiblingRatio(SlotId{1}, SlotId{2}, 0.75);
+    // Give slot 2 a second tab and select it.
+    Node* s2 = root.findSlot(SlotId{2});
+    Tab t2;
+    t2.id = TerminalId{2001};
+    t2.profile = L"cmd";
+    t2.cwd = L"C:\dev";
+    s2->slot().tabs.push_back(t2);
+    s2->slot().active = 1;
+
+    const json::Value j = root.toJson();
+    const std::string text = json::serialize(j, true);
+    Node back;
+    std::string err;
+    WIM_CHECK(Node::fromJson(json::parse(text).value, back, err));
+    WIM_CHECK(err.empty());
+
+    std::vector<std::pair<SlotId, Rect>> a, b;
+    layoutSlots(root, Rect{0, 0, 100, 100}, a);
+    layoutSlots(back, Rect{0, 0, 100, 100}, b);
+    WIM_CHECK_EQ(a.size(), b.size());
+    for (size_t i = 0; i < a.size(); ++i) {
+        WIM_CHECK_EQ(a[i].first.value, b[i].first.value);
+        WIM_CHECK(std::abs(a[i].second.w - b[i].second.w) < 1e-9);
+    }
+    const Node* back2 = back.findSlot(SlotId{2});
+    WIM_CHECK_EQ(back2->slot().tabs.size(), size_t(2));
+    WIM_CHECK_EQ(back2->slot().active, 1);
+    WIM_CHECK(back2->slot().tabs[1].cwd == L"C:\dev");
+
+    // Rejects malformed trees.
+    WIM_CHECK(!Node::fromJson(json::Value::object(), back, err));
+    WIM_CHECK(!err.empty());
+}
