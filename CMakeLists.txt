@@ -19,6 +19,7 @@ add_compile_definitions(
     _UNICODE
     NOMINMAX
     WIN32_LEAN_AND_MEAN
+    _CRT_SECURE_NO_WARNINGS
     WIM_VERSION="${PROJECT_VERSION}")
 
 # ---------------------------------------------------------------------------
@@ -42,6 +43,8 @@ target_link_libraries(wim PRIVATE wimcore)
 # wimtests - unit tests for core
 # ---------------------------------------------------------------------------
 enable_testing()
-add_executable(wimtests tests/main.cpp)
+file(GLOB WIMTEST_SOURCES CONFIGURE_DEPENDS tests/*.cpp)
+add_executable(wimtests ${WIMTEST_SOURCES})
+target_include_directories(wimtests PRIVATE tests)
 target_link_libraries(wimtests PRIVATE wimcore)
 add_test(NAME wimtests COMMAND wimtests)

@@ -1,6 +1,8 @@
-// wimtests - minimal test runner. The harness grows with core; the first
-// real suites land with src/core/util.
+// wimtests - entry point. Suites register via WIM_TEST in their own
+// translation units; this file only runs them.
+#include "test.h"
+
 int main()
 {
-    return 0;
+    return ::wimtest::runAll();
 }
