@@ -2,7 +2,17 @@
 // translation units; this file only runs them.
 #include "test.h"
 
-int main()
+#include <cstring>
+
+// Defined in tests/test_conpty.cpp: runs the live pseudoconsole scenarios
+// (this binary re-launched detached) and returns the failure count.
+int wimConPtyChildMain();
+
+int main(int argc, char** argv)
 {
+    for (int i = 1; i < argc; ++i) {
+        if (strcmp(argv[i], "--conpty-child") == 0)
+            return wimConPtyChildMain();
+    }
     return ::wimtest::runAll();
 }
